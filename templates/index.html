@@ -1,26 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>SpamShield AI</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
     <div class="hero">
         <h1>🛡 SpamShield AI</h1>
-        <p>Rule-Based Intelligent Email Spam Detection System</p>
+        <p>Intelligent Email Spam Detection System using Machine Learning</p>
     </div>
 
     <div class="card">
 
         <h2>Check Your Email</h2>
 
-        <form method="POST">
-            <textarea name="email_text" placeholder="Paste your email message here..." required></textarea>
+        <form method="POST" action="/">
+            <textarea name="email_text" placeholder="Paste your email message here..."
+                required>{{ email_text|default('') }}</textarea>
             <button type="submit">Analyze Message</button>
         </form>
+
+        <form method="POST" action="/fetch_gmail" style="margin-top: 15px;">
+            <button type="submit" class="gmail-btn">Fetch Latest 20 Emails Instead</button>
+        </form>
+
+        {% if error %}
+        <div class="result-box error">
+            <h3>Error</h3>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
 
         {% if result %}
         <div class="result-box {% if result == 'SPAM' %}spam{% else %}ham{% endif %}">
@@ -29,19 +43,38 @@
         </div>
         {% endif %}
 
+        {% if emails %}
+        <div class="emails-list" style="margin-top: 30px; text-align: left;">
+            <h3 style="margin-bottom: 20px; color: #fff;">Scanned Emails (Saved to CSV):</h3>
+            {% for email in emails %}
+            <div class="email-card {{ email.result|lower }}">
+                <div class="card-header">
+                    <div>
+                        <h4 class="sender">{{ email.sender }}</h4>
+                    </div>
+                    <div class="score-badge">
+                        {{ email.result }} ({{ email.score }})
+                    </div>
+                </div>
+                <p class="snippet">{{ email.snippet }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
     </div>
 
     <div class="info-section">
         <h2>About This Project</h2>
         <p>
-            This web application uses a rule-based detection system to analyze 
+            This web application uses a Machine Learning detection system to analyze
             email content and determine whether it is SPAM or HAM.
         </p>
 
         <div class="features">
             <div class="feature">
-                <h4>🔎 Keyword Detection</h4>
-                <p>Identifies suspicious promotional keywords.</p>
+                <h4>🧠 Machine Learning</h4>
+                <p>Advanced statistical models to classify spam.</p>
             </div>
 
             <div class="feature">
@@ -50,11 +83,12 @@
             </div>
 
             <div class="feature">
-                <h4>📊 90% Accuracy</h4>
-                <p>Tested on real-world dataset.</p>
+                <h4>📥 Direct Integration</h4>
+                <p>Pull recent emails straight from your Gmail.</p>
             </div>
         </div>
     </div>
 
 </body>
+
 </html>
