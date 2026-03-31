@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Inbox as InboxIcon, Search, AlertTriangle, CheckCircle, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface Email {
   id: number;
@@ -17,6 +23,17 @@ const InboxScanner = () => {
   const [scanning, setScanning] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const categorizedSpam = useMemo(() => {
+    const spams = emails.filter((e) => e.isSpam);
+    const grouped: Record<string, Email[]> = {};
+    spams.forEach((spam) => {
+      const cat = spam.category && spam.category !== "N/A" ? spam.category : "General Spam";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(spam);
+    });
+    return grouped;
+  }, [emails]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -109,15 +126,57 @@ const InboxScanner = () => {
         )}
 
         {emails.length > 0 && !scanning && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-            <div className="flex items-center justify-between mb-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">{emails.length} emails found</span>
               <span className="text-sm text-destructive font-medium">
                 {emails.filter((e) => e.isSpam).length} spam detected
               </span>
             </div>
 
-            {emails.map((email, i) => (
+            {Object.keys(categorizedSpam).length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Categorized Spam
+                </h3>
+                <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                  <Accordion type="single" collapsible className="w-full">
+                    {Object.entries(categorizedSpam).map(([category, catEmails], idx) => (
+                      <AccordionItem key={category} value={`item-${idx}`} className={idx === Object.keys(categorizedSpam).length - 1 ? "border-b-0" : ""}>
+                        <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <span className="font-medium text-destructive">{category}</span>
+                            <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
+                              {catEmails.length}
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="bg-muted/20 p-0 border-t">
+                          <div className="max-h-[300px] overflow-y-auto p-4 flex flex-col gap-3">
+                            {catEmails.map(email => (
+                              <div key={email.id} className="rounded-lg border border-border bg-background p-3 flex flex-col gap-1 transition-all hover:border-destructive/30">
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="font-medium text-sm text-foreground truncate">{email.from}</span>
+                                  <span className="text-xs text-destructive font-bold">{email.score}%</span>
+                                </div>
+                                <div className="text-sm text-foreground truncate">{email.subject}</div>
+                                <div className="text-xs text-muted-foreground truncate">{email.preview}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              </div>
+            )}
+
+            <h3 className="text-lg font-semibold text-foreground mb-1 mt-4">All Scanned Emails</h3>
+
+            <div className="flex flex-col gap-3">
+              {emails.map((email, i) => (
               <motion.div
                 key={email.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -162,6 +221,7 @@ const InboxScanner = () => {
                 </div>
               </motion.div>
             ))}
+            </div>
           </motion.div>
         )}
       </motion.div>

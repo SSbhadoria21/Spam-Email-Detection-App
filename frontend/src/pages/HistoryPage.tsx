@@ -1,7 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { History as HistoryIcon, Trash2, AlertTriangle, CheckCircle, RefreshCw, Inbox, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface HistoryItem {
   date: string;
@@ -17,6 +23,17 @@ interface HistoryItem {
 const HistoryPage = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const categorizedSpam = useMemo(() => {
+    const spams = history.filter((h) => h.isSpam);
+    const grouped: Record<string, HistoryItem[]> = {};
+    spams.forEach((spam) => {
+      const cat = spam.category && spam.category !== "N/A" ? spam.category : "General Spam";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(spam);
+    });
+    return grouped;
+  }, [history]);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -76,14 +93,59 @@ const HistoryPage = () => {
             <p className="text-xs text-muted-foreground mt-1">Analyze some emails to see results here</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between mb-2 text-sm text-muted-foreground">
               <span>{history.length} scan{history.length !== 1 ? "s" : ""} recorded</span>
               <span className="text-destructive font-medium">
                 {history.filter((h) => h.isSpam).length} spam detected
               </span>
             </div>
-            {history.map((item, i) => (
+
+            {Object.keys(categorizedSpam).length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Categorized Spam History
+                </h3>
+                <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                  <Accordion type="single" collapsible className="w-full">
+                    {Object.entries(categorizedSpam).map(([category, catItems], idx) => (
+                      <AccordionItem key={category} value={`history-${idx}`} className={idx === Object.keys(categorizedSpam).length - 1 ? "border-b-0" : ""}>
+                        <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <span className="font-medium text-destructive">{category}</span>
+                            <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
+                              {catItems.length}
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="bg-muted/20 p-0 border-t">
+                          <div className="max-h-[400px] overflow-y-auto p-4 flex flex-col gap-3">
+                            {catItems.map((item, idx2) => (
+                              <div key={`${item.date}-${idx2}`} className="rounded-lg border border-border bg-background p-3 flex flex-col gap-1 transition-all hover:border-destructive/30">
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="font-medium text-sm text-foreground truncate">{item.sender}</span>
+                                  <div className="text-right">
+                                    <div className="text-xs text-destructive font-bold">{item.score}%</div>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{new Date(item.date).toLocaleDateString()}</div>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">{item.message}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              </div>
+            )}
+
+            <h3 className="text-lg font-semibold text-foreground mb-1 mt-4">All Scan History</h3>
+            
+            <div className="flex flex-col gap-3">
+              {history.map((item, i) => (
               <motion.div
                 key={`${item.date}-${i}`}
                 initial={{ opacity: 0, x: -20 }}
@@ -128,6 +190,7 @@ const HistoryPage = () => {
                 </div>
               </motion.div>
             ))}
+            </div>
           </div>
         )}
       </motion.div>
