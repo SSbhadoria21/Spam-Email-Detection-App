@@ -6,6 +6,7 @@ spam_env/
 # Sensitive / OAuth
 credentials.json
 token.json
+firebase_credentials.json
 
 # Data files (regenerated at runtime)
 scan_history.csv

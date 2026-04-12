@@ -8,6 +8,8 @@ scikit-learn
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
+firebase-admin
+matplotlib
 
 ===============================================
  NPM DEPENDENCIES (managed via frontend/package.json)

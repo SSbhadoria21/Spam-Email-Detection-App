@@ -7,6 +7,15 @@ from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+import io
+import base64
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow, Flow
@@ -33,7 +42,16 @@ model = MultinomialNB()
 model.fit(X_vec, y)
 print("ML Model training complete.")
 
-HISTORY_CSV = 'scan_history.csv'
+# Initialize Firestore
+db = None
+try:
+    if not firebase_admin._apps:
+        cred = credentials.Certificate('firebase_credentials.json')
+        firebase_admin.initialize_app(cred)
+        print("Firebase Admin initialized successfully.")
+    db = firestore.client()
+except Exception as e:
+    print(f"Error initializing Firebase Admin: {e}")
 
 import re
 
@@ -74,25 +92,30 @@ def predict_spam(message):
     return prediction, spam_score, category
 
 
-def save_to_history(sender, message, result, score, category=None, source="manual"):
-    """Save scan result to CSV history."""
-    new_row = pd.DataFrame([{
-        'Date': datetime.now().isoformat(),
-        'Sender': sender,
-        'Message': message[:200],
-        'Result': result,
-        'Score': score,
-        'Category': category if category else "N/A",
-        'Source': source
-    }])
-    if os.path.exists(HISTORY_CSV):
-        existing = pd.read_csv(HISTORY_CSV)
-        combined = pd.concat([new_row, existing], ignore_index=True)
-        # Keep only last 200 records
-        combined = combined.head(200)
-    else:
-        combined = new_row
-    combined.to_csv(HISTORY_CSV, index=False)
+def save_to_history(sender, message, result, score, category=None, source="manual", gmail_id=None):
+    """Save scan result to Firestore history."""
+    if not db:
+        print("Firestore not initialized, cannot save history.")
+        return
+        
+    try:
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        doc_data = {
+            'user_email': user_email,
+            'Date': datetime.now().isoformat(),
+            'Sender': sender,
+            'Message': message[:200],
+            'Result': result,
+            'Score': score,
+            'Category': category if category else "N/A",
+            'Source': source
+        }
+        if gmail_id:
+            doc_data['gmail_id'] = gmail_id
+            
+        db.collection('history').add(doc_data)
+    except Exception as e:
+        print(f"Error saving to Firestore history: {e}")
 
 
 # --- Gmail API Setup ---
@@ -172,24 +195,17 @@ def fetch_gmail():
                     print(f"Error fetching message {msg_id}: {inner_e}")
                     continue
                     
-            # Handle CSV append logic
-            csv_path = 'fetched_emails.csv'
-            new_df = pd.DataFrame(new_emails)
+            # Remove duplicate snippets right away before prediction
+            seen_snippets = set()
+            unique_new_emails = []
+            for email in new_emails:
+                if email['Message'] not in seen_snippets:
+                    unique_new_emails.append(email)
+                    seen_snippets.add(email['Message'])
             
-            if os.path.exists(csv_path):
-                existing_df = pd.read_csv(csv_path)
-                combined_df = pd.concat([new_df, existing_df], ignore_index=True)
-                # Drop duplicates to prevent redundant logging
-                combined_df = combined_df.drop_duplicates(subset=['Message'], keep='first')
-            else:
-                combined_df = new_df
-                
-            combined_df.to_csv(csv_path, index=False)
-            
-            # Read from the combined dataframe and predict
-            for index, row in combined_df.iterrows():
-                sender = row['Sender']
-                snippet = str(row['Message']) if pd.notna(row['Message']) else ""
+            for email in unique_new_emails:
+                sender = email['Sender']
+                snippet = email['Message']
                 
                 prediction, raw_score, category = predict_spam(snippet)
                 
@@ -307,6 +323,16 @@ def google_callback():
             'name': user_info.get('name', user_info.get('email', '').split('@')[0]),
             'picture': user_info.get('picture', '')
         }
+        
+        # Save to firestore
+        if db:
+            try:
+                user_email_key = session['user']['email']
+                if user_email_key:
+                    db.collection('users').document(user_email_key).set(session['user'], merge=True)
+            except Exception as e:
+                print(f"Error saving user profile to Firestore: {e}")
+                
     except Exception as e:
         print(f"Error fetching user info: {e}")
         session['user'] = {
@@ -373,9 +399,25 @@ def api_fetch_gmail():
         if not messages:
             return jsonify({"emails": [], "message": "No recent messages found."})
 
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        seen_gmail_ids = set()
+        seen_snippets = set()
+
+        if db:
+            docs = db.collection('history').where("user_email", "==", user_email).stream()
+            for doc in docs:
+                d = doc.to_dict()
+                if 'gmail_id' in d:
+                    seen_gmail_ids.add(d['gmail_id'])
+                else:
+                    seen_snippets.add((d.get('Sender', ''), str(d.get('Message', ''))[:200]))
+
         emails_data = []
         for m in messages:
             msg_id = m['id']
+            if msg_id in seen_gmail_ids:
+                continue
+
             try:
                 msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
                 snippet = msg.get('snippet', '')
@@ -389,10 +431,13 @@ def api_fetch_gmail():
                     if h.get('name', '').lower() == 'subject':
                         subject = h.get('value')
 
+                if (sender, snippet[:200]) in seen_snippets:
+                    continue
+
                 prediction, score, category = predict_spam(snippet)
                 
                 # Save each scanned email to CSV history
-                save_to_history(sender, snippet, prediction, score, category=category, source="gmail")
+                save_to_history(sender, snippet, prediction, score, category=category, source="gmail", gmail_id=msg_id)
                 
                 emails_data.append({
                     'sender': sender,
@@ -415,35 +460,241 @@ def api_fetch_gmail():
 
 @app.route("/api/history", methods=["GET"])
 def api_history():
-    """Return scan history from CSV."""
-    if not os.path.exists(HISTORY_CSV):
-        return jsonify({"history": []})
+    """Return scan history from Firestore."""
+    if not db:
+        return jsonify({"history": [], "error": "Firestore not initialized."})
     
     try:
-        df = pd.read_csv(HISTORY_CSV)
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        docs = db.collection('history').where("user_email", "==", user_email).stream()
+        
+        all_docs = []
+        for doc in docs:
+            all_docs.append(doc)
+            
+        all_docs.sort(key=lambda d: d.to_dict().get('Date', ''), reverse=True)
+        all_docs = all_docs[:200]
+        
         history = []
-        for _, row in df.iterrows():
+        
+        for doc in all_docs:
+            doc_dict = doc.to_dict()
+            msg = str(doc_dict.get('Message', ''))
+            
             history.append({
-                'date': str(row.get('Date', '')),
-                'sender': str(row.get('Sender', 'Unknown')),
-                'message': str(row.get('Message', '')),
-                'result': str(row.get('Result', '')),
-                'score': float(row.get('Score', 0)),
-                'category': str(row.get('Category', 'N/A')),
-                'source': str(row.get('Source', 'manual')),
-                'isSpam': str(row.get('Result', '')).upper() == 'SPAM'
+                'id': doc.id,
+                'date': str(doc_dict.get('Date', '')),
+                'sender': str(doc_dict.get('Sender', 'Unknown')),
+                'message': msg,
+                'result': str(doc_dict.get('Result', '')),
+                'score': float(doc_dict.get('Score', 0)),
+                'category': str(doc_dict.get('Category', 'N/A')),
+                'source': str(doc_dict.get('Source', 'manual')),
+                'isSpam': str(doc_dict.get('Result', '')).upper() == 'SPAM'
             })
         return jsonify({"history": history})
     except Exception as e:
         return jsonify({"error": str(e), "history": []})
 
-
 @app.route("/api/history/clear", methods=["POST"])
 def api_clear_history():
-    """Clear scan history CSV."""
-    if os.path.exists(HISTORY_CSV):
-        os.remove(HISTORY_CSV)
-    return jsonify({"status": "cleared"})
+    """Clear scan history from Firestore."""
+    if not db:
+        return jsonify({"status": "error", "message": "Firestore not initialized."})
+        
+    try:
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        
+        # Use get() instead of stream() to prevent iterator mutation issues and use batch for reliability
+        docs = db.collection('history').where("user_email", "==", user_email).get()
+        
+        if docs:
+            batch = db.batch()
+            for doc in docs:
+                batch.delete(doc.reference)
+            batch.commit()
+            
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/analytics/charts", methods=["GET"])
+def api_analytics_charts():
+    """Generate Matplotlib charts for user analytics."""
+    if not db:
+        return jsonify({"error": "Firestore not initialized."})
+        
+    try:
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        docs = db.collection('history').where("user_email", "==", user_email).stream()
+        
+        spam_count = 0
+        safe_count = 0
+        categories = {}
+        
+        for doc in docs:
+            d = doc.to_dict()
+            res = str(d.get('Result', '')).upper()
+            if res == 'SPAM':
+                spam_count += 1
+                cat = d.get('Category', 'General Spam')
+                if not cat or cat == "N/A":
+                    cat = "General Spam"
+                categories[cat] = categories.get(cat, 0) + 1
+            else:
+                safe_count += 1
+                
+        if spam_count == 0 and safe_count == 0:
+            return jsonify({"charts": None, "message": "No data available."})
+            
+        # 1. Pie Chart (Spam vs Safe)
+        fig1, ax1 = plt.subplots(figsize=(4, 4))
+        # Custom colors to match the app theme
+        colors = ['#EF4444', '#10B981'] # Red for spam, Green for safe
+        ax1.pie([spam_count, safe_count], labels=['Spam', 'Safe'], autopct='%1.1f%%', startangle=90, colors=colors, textprops={'color':"w"})
+        ax1.axis('equal') 
+        fig1.patch.set_alpha(0.0) # Transparent background
+        
+        buf1 = io.BytesIO()
+        plt.savefig(buf1, format='png', transparent=True)
+        buf1.seek(0)
+        chart_ratio = base64.b64encode(buf1.read()).decode('utf-8')
+        plt.close(fig1)
+        
+        # 2. Bar Chart (Categories)
+        chart_categories = None
+        if categories:
+            fig2, ax2 = plt.subplots(figsize=(6, 4))
+            cats = list(categories.keys())
+            c_vals = list(categories.values())
+            ax2.bar(cats, c_vals, color='#8B5CF6') # Purple accent color
+            ax2.tick_params(axis='x', colors='white')
+            ax2.tick_params(axis='y', colors='white')
+            ax2.spines['bottom'].set_color('white')
+            ax2.spines['left'].set_color('white')
+            ax2.spines['top'].set_visible(False)
+            ax2.spines['right'].set_visible(False)
+            plt.xticks(rotation=15, ha='right')
+            fig2.patch.set_alpha(0.0)
+            ax2.set_facecolor((0, 0, 0, 0))
+            
+            plt.tight_layout()
+            buf2 = io.BytesIO()
+            plt.savefig(buf2, format='png', transparent=True)
+            buf2.seek(0)
+            chart_categories = base64.b64encode(buf2.read()).decode('utf-8')
+            plt.close(fig2)
+            
+        return jsonify({
+            "charts": {
+                "ratio": chart_ratio,
+                "categories": chart_categories
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+@app.route("/api/analytics/custom", methods=["GET"])
+def api_analytics_custom():
+    """Generate dynamic matched Custom Matplotlib chart."""
+    if not db:
+        return jsonify({"error": "Firestore not initialized."})
+        
+    metric = request.args.get("metric", "ratio") # ratio, categories, timeline
+    chart_type = request.args.get("type", "pie") # pie, bar, doughnut, line
+    
+    try:
+        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
+        docs = db.collection('history').where("user_email", "==", user_email).stream()
+        
+        history_data = []
+        for doc in docs:
+            history_data.append(doc.to_dict())
+            
+        if len(history_data) == 0:
+            return jsonify({"chart": None, "empty": True, "message": "No data available."})
+            
+        fig, ax = plt.subplots(figsize=(6, 4))
+        
+        # 1. Evaluate Metric
+        if metric == "ratio":
+            spam_count = sum(1 for d in history_data if str(d.get('Result', '')).upper() == 'SPAM')
+            safe_count = len(history_data) - spam_count
+            labels = ['Spam', 'Safe']
+            values = [spam_count, safe_count]
+            colors = ['#EF4444', '#10B981']
+        elif metric == "categories":
+            cats = {}
+            for d in history_data:
+                if str(d.get('Result', '')).upper() == 'SPAM':
+                    c = d.get('Category', 'General Spam')
+                    if not c or c == "N/A":
+                        c = "General Spam"
+                    cats[c] = cats.get(c, 0) + 1
+            labels = list(cats.keys()) if cats else ["No Spam"]
+            values = list(cats.values()) if cats else [1]
+            colors = ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444']
+        elif metric == "timeline":
+            dates = {}
+            for d in history_data:
+                try:
+                    date_str = str(d.get('Date', ''))[:10]
+                    if date_str:
+                        dates[date_str] = dates.get(date_str, 0) + 1
+                except: pass
+            
+            sorted_dates = sorted(dates.keys())
+            labels = sorted_dates if sorted_dates else ["Today"]
+            values = [dates[k] for k in sorted_dates] if sorted_dates else [0]
+            colors = ['#3B82F6']
+        else:
+            return jsonify({"error": "Invalid metric."})
+            
+        # 2. Render Chart Type
+        if chart_type == "pie":
+            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"w"})
+            ax.axis('equal')
+        elif chart_type == "doughnut":
+            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"w"}, wedgeprops=dict(width=0.4, edgecolor='none'))
+            ax.axis('equal')
+        elif chart_type == "bar":
+            # For bar chart, we can safely just loop or pass single color
+            cc = colors if len(colors) >= len(labels) else (colors*(len(labels)//len(colors)+1))[:len(labels)]
+            ax.bar(labels, values, color=cc)
+            ax.tick_params(axis='x', colors='white')
+            ax.tick_params(axis='y', colors='white')
+            ax.spines['bottom'].set_color('white')
+            ax.spines['left'].set_color('white')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            plt.xticks(rotation=15, ha='right')
+        elif chart_type == "line":
+            ax.plot(labels, values, marker='o', color='#3B82F6', linewidth=2, markersize=8)
+            ax.tick_params(axis='x', colors='white')
+            ax.tick_params(axis='y', colors='white')
+            ax.spines['bottom'].set_color('white')
+            ax.spines['left'].set_color('white')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            plt.xticks(rotation=45, ha='right')
+            ax.grid(color='#334155', linestyle='-', linewidth=0.5, alpha=0.5)
+
+        fig.patch.set_alpha(0.0)
+        if chart_type in ["bar", "line"]:
+            ax.set_facecolor((0, 0, 0, 0))
+            
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', transparent=True)
+        buf.seek(0)
+        chart_b64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+        
+        return jsonify({
+            "chart": chart_b64,
+            "empty": False
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
 if __name__ == "__main__":

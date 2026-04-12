@@ -1,11 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Shield, Search, History, Settings, User, LogOut, Inbox } from "lucide-react";
+import { Shield, Search, History, Settings, User, LogOut, Inbox, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const links = [
   { to: "/dashboard", icon: Search, label: "Detect Spam", end: true },
   { to: "/dashboard/inbox", icon: Inbox, label: "Inbox Scanner" },
   { to: "/dashboard/history", icon: History, label: "History" },
+  { to: "/dashboard/visualizations", icon: BarChart3, label: "Visualizations" },
   { to: "/dashboard/profile", icon: User, label: "Profile" },
   { to: "/dashboard/settings", icon: Settings, label: "Settings" },
 ];

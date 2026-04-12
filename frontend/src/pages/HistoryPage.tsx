@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { History as HistoryIcon, Trash2, AlertTriangle, CheckCircle, RefreshCw, Inbox, Mail } from "lucide-react";
+import { History as HistoryIcon, Trash2, AlertTriangle, CheckCircle, RefreshCw, Inbox, Mail, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -57,6 +57,30 @@ const HistoryPage = () => {
     setHistory([]);
   };
 
+  const downloadCSV = () => {
+    if (history.length === 0) return;
+    const headers = ["Date", "Sender", "Message", "Result", "Score", "Category", "Source"];
+    const rows = history.map(h => [
+      new Date(h.date).toISOString(),
+      `"${String(h.sender).replace(/"/g, '""')}"`,
+      `"${String(h.message).replace(/"/g, '""')}"`,
+      h.result,
+      h.score,
+      h.category || "N/A",
+      h.source
+    ].join(","));
+    
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `scan_history_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 md:p-10 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -73,10 +97,16 @@ const HistoryPage = () => {
               Refresh
             </Button>
             {history.length > 0 && (
-              <Button variant="outline" onClick={clearHistory} className="border-destructive/30 text-destructive hover:bg-destructive/10 gap-2">
-                <Trash2 className="h-4 w-4" />
-                Clear
-              </Button>
+              <>
+                <Button variant="outline" onClick={downloadCSV} className="border-border gap-2">
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+                <Button variant="outline" onClick={clearHistory} className="border-destructive/30 text-destructive hover:bg-destructive/10 gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Clear
+                </Button>
+              </>
             )}
           </div>
         </div>
