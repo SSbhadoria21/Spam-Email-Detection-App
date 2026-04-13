@@ -25,7 +25,7 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow HTTP for local dev
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'  # Prevent crash if Google returns scopes in different order
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 CORS(app, supports_credentials=True)
 
 # --- ML Model Training ---
