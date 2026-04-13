@@ -252,14 +252,14 @@ def get_google_flow():
             'client_secret': cred_section['client_secret'],
             'auth_uri': cred_section['auth_uri'],
             'token_uri': cred_section['token_uri'],
-            'redirect_uris': ['http://localhost:5000/api/auth/google/callback']
+            'redirect_uris': ['https://spam-email-detection-app-xi.vercel.app/api/auth/google/callback']
         }
     }
 
     flow = Flow.from_client_config(
         client_config,
         scopes=SCOPES,
-        redirect_uri='http://localhost:5000/api/auth/google/callback'
+        redirect_uri='https://spam-email-detection-app-xi.vercel.app/api/auth/google/callback'
     )
     return flow
 
@@ -342,7 +342,7 @@ def google_callback():
         }
     
     # Redirect to frontend dashboard
-    return redirect('http://localhost:8080/dashboard')
+    return redirect('https://spam-email-detection-app-xi.vercel.app/dashboard')
 
 
 @app.route("/api/auth/user", methods=["GET"])
