@@ -171,32 +171,38 @@ def get_gmail_service():
 
 # --- Google OAuth Authentication Routes ---
 
-def get_google_flow():
-    """Create a Google OAuth2 flow for web login."""
-    if not os.path.exists('credentials.json'):
-        raise FileNotFoundError(
-            "Google OAuth credentials file 'credentials.json' not found. "
-            "Please download it from the Google Cloud Console (APIs & Services > Credentials) "
-            "and place it in the project root directory."
-        )
+# --- Production Session Hardening ---
+# Required for cross-domain auth (Vercel -> Render)
+if os.getenv("RENDER") or os.getenv("VERCEL"):
+    app.config.update(
+        SESSION_COOKIE_SAMESITE='None',
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_NAME='__Host-spam-shield-session' if not os.getenv("DEBUG") else 'spam-shield-session'
+    )
 
-    # Read credentials.json and adapt for web flow
+def get_google_flow():
+    """Create a Google OAuth2 flow for web login with dynamic URL detection."""
+    if not os.path.exists('credentials.json'):
+        raise FileNotFoundError("Google Cloud 'credentials.json' missing from root directory.")
+
     with open('credentials.json', 'r') as f:
         cred_data = json.load(f)
 
-    # Support both 'installed' and 'web' credential types
     cred_section = cred_data.get('installed') or cred_data.get('web')
-    if not cred_section:
-        raise ValueError(
-            "Invalid credentials.json format. Expected 'installed' or 'web' key."
-        )
-
-    # Convert credentials to web flow format
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080").rstrip('/')
-    backend_url = os.getenv("BACKEND_URL", "http://localhost:5000").rstrip('/')
     
-    # Callback must match what's in Google Cloud Console
-    redirect_uri = f"{backend_url}/api/auth/google/callback"
+    # Auto-detect the backend URL
+    # On Render, we want the https://... url. 
+    # request.host_url provides the current server's URL (e.g., https://spam-app.onrender.com/)
+    try:
+        current_base_url = request.host_url.rstrip('/')
+        # Replace http with https for production
+        if "onrender.com" in current_base_url:
+            current_base_url = current_base_url.replace("http://", "https://")
+    except:
+        current_base_url = os.getenv("BACKEND_URL", "http://localhost:5000").rstrip('/')
+    
+    redirect_uri = f"{current_base_url}/api/auth/google/callback"
     
     client_config = {
         'web': {
@@ -208,12 +214,24 @@ def get_google_flow():
         }
     }
 
-    flow = Flow.from_client_config(
+    return Flow.from_client_config(
         client_config,
         scopes=SCOPES,
         redirect_uri=redirect_uri
     )
-    return flow
+
+
+@app.route("/", methods=["GET"])
+def api_status():
+    """Welcome/Health check route for the Headless Backend."""
+    return jsonify({
+        "status": "online",
+        "service": "Spam Email Detection AI Shield Backend",
+        "version": "1.0.0",
+        "message": "Backend is active. Please use the Vercel frontend to access the full application.",
+        "documentation": "https://github.com/SSbhadoria21/Spam-Email-Detection-App",
+        "engine": "Scikit-Learn / Multinomial Naive Bayes"
+    })
 
 
 @app.route("/api/auth/google/login", methods=["GET"])
@@ -299,7 +317,9 @@ def google_callback():
         }
     
     # Redirect to frontend dashboard
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080").rstrip('/')
+    # Use Vercel URL as default in production
+    default_frontend = "https://spam-email-detection-app-xi.vercel.app" if os.getenv("RENDER") else "http://localhost:8080"
+    frontend_url = os.getenv("FRONTEND_URL", default_frontend).rstrip('/')
     return redirect(f"{frontend_url}/dashboard")
 
 
