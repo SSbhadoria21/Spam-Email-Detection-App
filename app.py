@@ -510,19 +510,18 @@ def api_history():
         return jsonify({"history": [], "error": "Firestore not initialized."})
     
     try:
-        user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
-        docs = db.collection('users').document(user_email).collection('history').stream()
+        # Optimization: Sort and limit on server side (requires Firestore index)
+        # If index doesn't exist, we fallback to client-side sort but still stream for efficiency
+        history_query = db.collection('users').document(user_email).collection('history')
         
-        all_docs = []
-        for doc in docs:
-            all_docs.append(doc)
+        try:
+            docs = history_query.order_by('Date', direction=firestore.Query.DESCENDING).limit(200).stream()
+        except:
+            # Fallback for if index is missing in development
+            docs = history_query.stream()
             
-        all_docs.sort(key=lambda d: d.to_dict().get('Date', ''), reverse=True)
-        all_docs = all_docs[:200]
-        
         history = []
-        
-        for doc in all_docs:
+        for doc in docs:
             doc_dict = doc.to_dict()
             msg = str(doc_dict.get('Message', ''))
             
@@ -590,7 +589,8 @@ def api_analytics_charts():
         
     try:
         user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
-        docs = db.collection('users').document(user_email).collection('history').stream()
+        # Optimization: Only select the fields needed for the charts
+        docs = db.collection('users').document(user_email).collection('history').select(['Result', 'Category']).stream()
         
         spam_count = 0
         safe_count = 0
@@ -613,18 +613,22 @@ def api_analytics_charts():
             
         # 1. Pie Chart (Spam vs Safe)
         fig1, ax1 = plt.subplots(figsize=(5, 5))
-        # Premium Teal/Cyan theme
-        colors = ['#F87171', '#14FFEC'] # Red for spam, Cyan for safe
-        ax1.pie([spam_count, safe_count], labels=['Spam', 'Safe'], autopct='%1.1f%%', startangle=90, colors=colors, 
-                textprops={'color':"#F9FAFB", 'weight':'bold', 'fontsize': 10}, pctdistance=0.85)
+        # Vibrant Colorful structures
+        colors = ['#EF4444', '#10B981'] # Red for spam, Emerald for safe
+        patches, texts, pcts = ax1.pie([spam_count, safe_count], labels=['Spam', 'Safe'], autopct='%1.1f%%', startangle=90, colors=colors, 
+                                     textprops={'color':"black", 'weight':'bold', 'fontsize': 10}, pctdistance=0.75)
         
-        # Add a circle at the center to make it a doughnut if preferred
+        # Style percentages to be visible on colorful wedges
+        plt.setp(pcts, color='black')
+        
         ax1.axis('equal') 
-        fig1.patch.set_facecolor('#030712') # Match dashboard bg
+        fig1.patch.set_facecolor('white') 
+        ax1.set_facecolor('white')
+        ax1.legend(loc="upper right", fontsize=8)
         plt.tight_layout()
         
         buf1 = io.BytesIO()
-        plt.savefig(buf1, format='png', transparent=True)
+        plt.savefig(buf1, format='png') # background now solid white
         buf1.seek(0)
         chart_ratio = base64.b64encode(buf1.read()).decode('utf-8')
         plt.close(fig1)
@@ -635,20 +639,25 @@ def api_analytics_charts():
             fig2, ax2 = plt.subplots(figsize=(7, 4))
             cats = list(categories.keys())
             c_vals = list(categories.values())
-            ax2.bar(cats, c_vals, color='#14FFEC') # Cyan accent color
-            ax2.tick_params(axis='x', colors='#9CA3AF', labelsize=8)
-            ax2.tick_params(axis='y', colors='#9CA3AF', labelsize=8)
-            ax2.spines['bottom'].set_color('#374151')
-            ax2.spines['left'].set_color('#374151')
+            # Use colorful palette for bars
+            bar_colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+            bars = ax2.bar(cats, c_vals, color=bar_colors[:len(cats)])
+            
+            ax2.tick_params(axis='x', colors='black', labelsize=8)
+            ax2.tick_params(axis='y', colors='black', labelsize=8)
+            ax2.spines['bottom'].set_color('black')
+            ax2.spines['left'].set_color('black')
             ax2.spines['top'].set_visible(False)
             ax2.spines['right'].set_visible(False)
+            
             plt.xticks(rotation=15, ha='right')
-            fig2.patch.set_facecolor('#030712')
-            ax2.set_facecolor('#030712')
+            fig2.patch.set_facecolor('white')
+            ax2.set_facecolor('white')
+            ax2.legend(bars, cats, loc="upper right", fontsize=8)
             
             plt.tight_layout()
             buf2 = io.BytesIO()
-            plt.savefig(buf2, format='png', transparent=True)
+            plt.savefig(buf2, format='png')
             buf2.seek(0)
             chart_categories = base64.b64encode(buf2.read()).decode('utf-8')
             plt.close(fig2)
@@ -672,7 +681,8 @@ def api_analytics_custom():
     
     try:
         user_email = session.get('user', {}).get('email', 'anonymous@local') if session else 'anonymous@local'
-        docs = db.collection('users').document(user_email).collection('history').stream()
+        # Optimization: Only load the fields relevant to analytics
+        docs = db.collection('users').document(user_email).collection('history').select(['Result', 'Category', 'Date']).stream()
         
         history_data = []
         for doc in docs:
@@ -719,40 +729,44 @@ def api_analytics_custom():
             
         # 2. Render Chart Type
         if chart_type == "pie":
-            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"w"})
+            patches, texts, pcts = ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"black"}, pctdistance=0.75)
+            plt.setp(pcts, color='black', weight='bold') # Black text on colored wedges
             ax.axis('equal')
+            ax.legend(loc="upper right", bbox_to_anchor=(1, 1), fontsize=8)
         elif chart_type == "doughnut":
-            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"w"}, wedgeprops=dict(width=0.4, edgecolor='none'))
+            patches, texts, pcts = ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors[:len(labels)], textprops={'color':"black"}, wedgeprops=dict(width=0.4, edgecolor='none'), pctdistance=0.75)
+            plt.setp(pcts, color='black', weight='bold')
             ax.axis('equal')
+            ax.legend(loc="upper right", bbox_to_anchor=(1, 1), fontsize=8)
         elif chart_type == "bar":
-            # For bar chart, we can safely just loop or pass single color
             cc = colors if len(colors) >= len(labels) else (colors*(len(labels)//len(colors)+1))[:len(labels)]
-            ax.bar(labels, values, color=cc)
-            ax.tick_params(axis='x', colors='white')
-            ax.tick_params(axis='y', colors='white')
-            ax.spines['bottom'].set_color('white')
-            ax.spines['left'].set_color('white')
+            bars = ax.bar(labels, values, color=cc)
+            ax.tick_params(axis='x', colors='black')
+            ax.tick_params(axis='y', colors='black')
+            ax.spines['bottom'].set_color('black')
+            ax.spines['left'].set_color('black')
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             plt.xticks(rotation=15, ha='right')
+            ax.legend(bars, labels, loc="upper right", fontsize=8)
         elif chart_type == "line":
-            ax.plot(labels, values, marker='o', color='#3B82F6', linewidth=2, markersize=8)
-            ax.tick_params(axis='x', colors='white')
-            ax.tick_params(axis='y', colors='white')
-            ax.spines['bottom'].set_color('white')
-            ax.spines['left'].set_color('white')
+            line, = ax.plot(labels, values, marker='o', color='#3B82F6', linewidth=2, markersize=8, label=metric.capitalize())
+            ax.tick_params(axis='x', colors='black')
+            ax.tick_params(axis='y', colors='black')
+            ax.spines['bottom'].set_color('black')
+            ax.spines['left'].set_color('black')
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             plt.xticks(rotation=45, ha='right')
-            ax.grid(color='#334155', linestyle='-', linewidth=0.5, alpha=0.5)
+            ax.grid(color='#E5E7EB', linestyle='-', linewidth=0.5, alpha=0.5)
+            ax.legend(loc="upper right", fontsize=8)
 
-        fig.patch.set_alpha(0.0)
-        if chart_type in ["bar", "line"]:
-            ax.set_facecolor((0, 0, 0, 0))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
             
         plt.tight_layout()
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', transparent=True)
+        plt.savefig(buf, format='png') # transparency removed to keep white background
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close(fig)

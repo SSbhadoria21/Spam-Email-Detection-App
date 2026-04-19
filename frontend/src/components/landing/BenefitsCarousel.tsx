@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
-import { ShieldCheck, Eye, Clock, Fingerprint, Globe, BellRing } from "lucide-react";
+import { ShieldCheck, Eye, Clock, Fingerprint, Globe, BarChart3 } from "lucide-react";
 
 const benefits = [
-  { icon: ShieldCheck, title: "99.7% Accuracy", desc: "Industry-leading spam detection powered by advanced AI models" },
+  { icon: ShieldCheck, title: "99.7% Accuracy", desc: "Industry-leading spam detection powered by advanced classification engines" },
   { icon: Eye, title: "Phishing Protection", desc: "Identifies phishing attempts and malicious links instantly" },
   { icon: Clock, title: "Real-time Analysis", desc: "Get results in under 2 seconds for any email content" },
   { icon: Fingerprint, title: "Privacy First", desc: "Your emails are never stored — analyzed and discarded" },
   { icon: Globe, title: "Multi-language", desc: "Detects spam in 50+ languages with equal precision" },
-  { icon: BellRing, title: "Smart Alerts", desc: "Get notified about suspicious patterns in your inbox" },
+  { icon: BarChart3, title: "Insightful Analytics", desc: "Detailed visualization of spam patterns and filtration metrics" },
 ];
 
 export const BenefitsCarousel = () => {
@@ -22,7 +22,7 @@ export const BenefitsCarousel = () => {
         className="text-center mb-16 px-6"
       >
         <h2 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">
-          Why Choose <span className="text-gradient-accent">SpamGuard</span>?
+          Why Choose <span className="text-gradient-accent">Spam Detection</span>?
         </h2>
         <p className="text-muted-foreground max-w-xl mx-auto">
           Trusted by professionals worldwide to keep their inbox clean.

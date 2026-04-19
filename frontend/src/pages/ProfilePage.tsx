@@ -39,8 +39,12 @@ const ProfilePage = () => {
             <span className="text-gradient-accent">Account details</span>
           </h1>
           <div className="flex items-center gap-4 mb-8">
-            <div className="w-16 h-16 rounded-full bg-primary/20 flex flex-shrink-0 items-center justify-center text-primary text-2xl font-bold shadow-[0_0_15px_rgba(45,212,191,0.2)]">
-              {user?.name?.[0]?.toUpperCase() || "U"}
+            <div className="w-16 h-16 rounded-full bg-primary/20 flex flex-shrink-0 items-center justify-center text-primary text-2xl font-bold shadow-[0_0_15px_rgba(45,212,191,0.2)] overflow-hidden">
+               {user?.picture ? (
+                 <img src={user.picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+               ) : (
+                 user?.name?.[0]?.toUpperCase() || "U"
+               )}
             </div>
             <div className="overflow-hidden">
               <h2 className="text-xl font-bold text-foreground truncate">{user?.name || "User"}</h2>

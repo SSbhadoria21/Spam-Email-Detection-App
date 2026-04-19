@@ -30,16 +30,16 @@ const Index = () => {
         <div className="container mx-auto flex items-center justify-between py-4 px-6 md:px-12">
           <Link to="/" className="flex items-center gap-2 group">
             <div className="p-1 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <img src="/favicon.ico" alt="SpamShield Logo" className="h-8 w-8 drop-shadow-[0_0_8px_rgba(20,255,236,0.3)]" />
+              <img src="/favicon.ico" alt="Dashboard Logo" className="h-8 w-8 drop-shadow-[0_0_8px_rgba(20,255,236,0.3)]" />
             </div>
             <span className="text-xl font-bold tracking-tight">
-              Spam<span className="text-primary">Shield</span>
+              Spam Email <span className="text-primary">Detection</span>
             </span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground font-medium">
             <a href="/#features" className="hover:text-primary transition-all hover:tracking-wider">Features</a>
-            {/* <Link to="/developers" className="hover:text-primary transition-all hover:tracking-wider">Developers</Link> */}
+            <Link to="/developers" className="hover:text-primary transition-all hover:tracking-wider">Developers</Link>
             <a href="https://github.com/SSbhadoria21/Spam-Email-Detection-App" target="_blank" className="hover:text-primary transition-all hover:tracking-wider">Github</a>
           </div>
           
@@ -57,7 +57,7 @@ const Index = () => {
                     <Button variant="ghost" className="relative h-10 w-10 rounded-full border border-border p-0 overflow-hidden hover:border-primary/50 transition-colors">
                       <Avatar className="h-full w-full">
                         {user.picture ? (
-                          <AvatarImage src={user.picture} alt={user.name} />
+                          <AvatarImage src={user.picture} alt={user.name} referrerPolicy="no-referrer" />
                         ) : (
                           <AvatarFallback className="bg-primary/10 text-primary uppercase text-xs">
                             {user.name ? user.name.charAt(0) : "U"}
@@ -116,7 +116,6 @@ const Index = () => {
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center pt-24 px-6 overflow-hidden bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1)_0%,rgba(3,7,18,1)_100%)]">
-        {/* Animated Background Elements */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -left-1/4 w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
           <div className="absolute bottom-1/4 -right-1/4 w-[40%] h-[40%] bg-accent/5 rounded-full blur-[120px]" />
@@ -139,7 +138,7 @@ const Index = () => {
             
             <h1 className="text-5xl md:text-7xl font-bold leading-[1.1] mb-8 tracking-tight">
               Next-Gen <br /> 
-              <span className="text-primary italic">Email Security</span> <br />
+              <span className="text-primary italic">Algorithmic Security</span> <br />
               for your Inbox.
             </h1>
             
@@ -188,7 +187,7 @@ const Index = () => {
                       </div>
                     </div>
                     
-                    <h3 className="text-2xl font-bold text-foreground mb-4">Neural Scanner v1.0</h3>
+                    <h3 className="text-2xl font-bold text-foreground mb-4">Algorithmic Scanner v1.0</h3>
                     <div className="space-y-4">
                       <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                         <motion.div 
@@ -315,7 +314,7 @@ const Index = () => {
             <div className="relative z-10">
               <h2 className="text-4xl md:text-5xl font-bold mb-6">Security Simplified.</h2>
               <p className="text-muted-foreground text-lg mb-10 max-w-lg mx-auto leading-relaxed">
-                No credit cards. No false promises. Just actual AI protection for your digital communication.
+                No credit cards. No false promises. Just actual advanced protection for your digital communication.
               </p>
               <Link to={user ? "/dashboard" : "/signup"}>
                 <Button size="lg" className="h-16 px-12 bg-primary text-primary-foreground text-lg font-bold rounded-2xl shadow-xl hover:scale-105 transition-transform">

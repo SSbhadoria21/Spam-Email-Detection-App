@@ -88,7 +88,7 @@ const Login = () => {
         <Link to="/" className="flex items-center gap-2 justify-center mb-8">
           <Shield className="h-8 w-8 text-primary" />
           <span className="text-2xl font-bold text-foreground">
-            Spam<span className="text-gradient-primary">Guard</span>
+            Spam Email <span className="text-primary italic">Detection</span>
           </span>
         </Link>
 
@@ -145,7 +145,7 @@ const Login = () => {
 
           <div className="mt-6 pt-6 border-t border-border">
             <p className="text-xs text-muted-foreground text-center">
-              By signing in, you grant SpamGuard read-only access to your Gmail
+              By signing in, you grant Spam Email Detection App read-only access to your Gmail
               inbox for spam analysis. We never modify or delete your emails.
             </p>
           </div>

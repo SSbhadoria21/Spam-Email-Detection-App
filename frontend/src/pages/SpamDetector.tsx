@@ -61,7 +61,7 @@ const SpamDetector = () => {
         transition={{ duration: 0.5 }}
       >
         <h1 className="text-4xl font-black text-foreground mb-2 tracking-tighter uppercase">
-          Neural <span className="text-primary tracking-tight">Interceptor</span>
+          Algorithmic <span className="text-primary tracking-tight">Interceptor</span>
         </h1>
         <p className="text-muted-foreground font-medium mb-10">Real-time spam analysis powered by Bayes-Probabilistic modeling</p>
 
@@ -95,7 +95,7 @@ const SpamDetector = () => {
                 {analyzing ? (
                   <div className="flex items-center gap-3">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    Neural Processing...
+                    Scanning Content...
                   </div>
                 ) : (
                   <>
@@ -170,7 +170,7 @@ const SpamDetector = () => {
                        <ul className="space-y-3">
                           {[
                             `Classification: ${result.result}`,
-                            `Neural Score: ${result.score}% probability`,
+                            `Probability: ${result.score}%`,
                             `Category: ${result.category || "General"}`,
                             "Audit: Record persisted to secure history"
                           ].map((log, i) => (
@@ -207,7 +207,7 @@ const SpamDetector = () => {
               className="mt-12 rounded-[2rem] border border-destructive/20 bg-destructive/5 p-12 text-center"
             >
               <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h3 className="text-xl font-black text-foreground mb-2 uppercase tracking-tight">Neural Sync Error</h3>
+              <h3 className="text-xl font-black text-foreground mb-2 uppercase tracking-tight">Sync Error</h3>
               <p className="text-muted-foreground">The analysis engine is unresponsive. Ensure the Flask backend is active on port 5000.</p>
             </motion.div>
           )}
