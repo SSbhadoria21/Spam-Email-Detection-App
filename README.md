@@ -88,3 +88,5 @@ This project is a full-stack web application designed to detect spam emails. It 
 
 *   **Frontend:** The frontend can be deployed to platforms like Vercel or Netlify. Make sure to configure the API URL in your frontend `.env` to point to your live backend.
 *   **Backend:** The backend can be deployed to platforms like Render or Heroku. Ensure you provide the necessary environment variables and the `build.txt` (running `pip install -r requirements.txt`) and a start command (e.g., `gunicorn app:app`). Note that Render deployment requires a `requirements.txt` with only standard python dependencies.
+## Deployed Link
+https://spam-email-detection-app-xi.vercel.app/
